@@ -24,21 +24,29 @@ GRANT MANAGE CALLER GRANTS ON ACCOUNT TO ROLE SYSADMIN;
 -- ── Step 2: Grant caller privileges to the application ───────
 USE ROLE SYSADMIN;
 
--- Allow the app's Streamlit to SELECT from the consumer's DEALS table
--- on behalf of the viewer.  The Row Access Policy will then filter rows
--- using the VIEWER's identity — not the application's identity.
+-- IMPORTANT: every object in the query path needs a CALLER grant.
+-- The "restricted" in Restricted Caller Rights means the RCR connection
+-- can ONLY access objects covered by an explicit CALLER grant — even if
+-- the viewer's role has broader privileges in the consumer account.
 --
 -- Note: The syntax for targeting a Snowflake Native Application in
--- GRANT CALLER statements is the same as for a regular role, using
--- the APPLICATION keyword.  Replace SALES_DEMO_APP with the actual
--- installed application name if you changed it.
+-- GRANT CALLER statements uses the APPLICATION keyword.
+-- Replace SALES_DEMO_APP with the actual installed application name.
+
+-- Database + schema visibility
+GRANT CALLER USAGE ON DATABASE CONSUMER_DB
+  TO APPLICATION SALES_DEMO_APP;
+
+GRANT CALLER USAGE ON SCHEMA CONSUMER_DB.SALES
+  TO APPLICATION SALES_DEMO_APP;
+
+-- Table read (Row Access Policy will filter rows using the viewer's identity)
 GRANT CALLER SELECT ON TABLE CONSUMER_DB.SALES.DEALS
   TO APPLICATION SALES_DEMO_APP;
 
--- Allow the app's Streamlit to use the consumer warehouse on behalf
--- of the viewer.
+-- Warehouse to run the query
 GRANT CALLER USAGE ON WAREHOUSE CONSUMER_WH
   TO APPLICATION SALES_DEMO_APP;
 
--- ── Verify ───────────────────────────────────────────────────
+-- ── Verify (should show 4 rows) ───────────────────────────────
 SHOW CALLER GRANTS TO APPLICATION SALES_DEMO_APP;

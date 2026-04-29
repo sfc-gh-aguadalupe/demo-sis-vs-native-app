@@ -74,25 +74,31 @@ def get_owner_deals():
 
 @st.cache_data(scope="session")   # scope="session" required for RCR
 def get_caller_context():
-    return rcr_conn.query(
+    # Must use raw cursor — rcr_conn.query() wraps with @st.cache_data
+    # internally (no scope="session"), which Streamlit blocks for RCR.
+    import pandas as pd
+    cur = rcr_conn.cursor()
+    cur.execute(
         "SELECT CURRENT_USER() AS who, CURRENT_ROLE() AS role, "
-        "       CURRENT_DATABASE() AS db",
-        ttl=0,
+        "       CURRENT_DATABASE() AS db"
     )
+    cols = [d[0] for d in cur.description]
+    return pd.DataFrame(cur.fetchall(), columns=cols)
 
 @st.cache_data(scope="session")
 def get_caller_deals():
-    return rcr_conn.query(
-        f"""
+    import pandas as pd
+    cur = rcr_conn.cursor()
+    cur.execute(f"""
         SELECT rep_name  AS "Rep",
                region    AS "Region",
                deal_name AS "Deal",
                amount    AS "Amount ($)"
         FROM   {CONSUMER_DEALS_TABLE}
         ORDER  BY amount DESC
-        """,
-        ttl=0,
-    )
+    """)
+    cols = [d[0] for d in cur.description]
+    return pd.DataFrame(cur.fetchall(), columns=cols)
 
 
 # ── Native App banner ─────────────────────────────────────────────────────────
