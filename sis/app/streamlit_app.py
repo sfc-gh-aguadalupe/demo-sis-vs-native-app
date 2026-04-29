@@ -66,16 +66,24 @@ def get_owner_deals():
 
 # scope="session" is REQUIRED for Restricted Caller's Rights cache entries.
 # Without it Streamlit's default global cache would mix data across viewers.
+#
+# IMPORTANT: use rcr_conn.cursor() instead of rcr_conn.query().
+# conn.query() wraps results in its own @st.cache_data (without scope="session"),
+# which Streamlit blocks when the connection is an RCR connection.
+# Using the raw cursor bypasses that internal cache entirely.
 @st.cache_data(scope="session")
 def get_caller_context():
-    return rcr_conn.query(
-        "SELECT CURRENT_USER() AS who, CURRENT_ROLE() AS role",
-        ttl=0,
-    )
+    import pandas as pd
+    cur = rcr_conn.cursor()
+    cur.execute("SELECT CURRENT_USER() AS who, CURRENT_ROLE() AS role")
+    cols = [d[0] for d in cur.description]
+    return pd.DataFrame(cur.fetchall(), columns=cols)
 
 @st.cache_data(scope="session")
 def get_caller_deals():
-    return rcr_conn.query(
+    import pandas as pd
+    cur = rcr_conn.cursor()
+    cur.execute(
         """
         SELECT rep_name  AS "Rep",
                region    AS "Region",
@@ -83,9 +91,10 @@ def get_caller_deals():
                amount    AS "Amount ($)"
         FROM   SALES_DB.SALES.DEALS
         ORDER  BY amount DESC
-        """,
-        ttl=0,
+        """
     )
+    cols = [d[0] for d in cur.description]
+    return pd.DataFrame(cur.fetchall(), columns=cols)
 
 
 # ── Page header ──────────────────────────────────────────────────────────────
