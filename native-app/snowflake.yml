@@ -1,0 +1,30 @@
+definition_version: 2
+
+# ── Native App Package ────────────────────────────────────────────────────────
+# Run:  snow app run         (from the native-app/ directory)
+# This command:
+#   1. Creates or updates the application package SALES_DEMO_PKG
+#   2. Uploads the contents of native-app/app/ to the package stage
+#   3. Creates (or upgrades) the application SALES_DEMO_APP in dev mode
+#
+# The Streamlit inside the app uses SYSTEM_COMPUTE_POOL_CPU — the same
+# system-managed CPU compute pool used by the SiS standalone demo.
+# No compute pool provisioning is required in the consumer account.
+# ─────────────────────────────────────────────────────────────────────────────
+
+entities:
+  sales_demo_pkg:
+    type: application package
+    # All files under native-app/app/ are uploaded to the root of the stage
+    artifacts:
+      - src: app
+        dest: /
+    manifest: app/manifest.yml
+
+  sales_demo_app:
+    type: application
+    from:
+      target: sales_demo_pkg
+    # debug: true enables development mode — the app is installed directly
+    # from the stage without a versioned release.  Remove for production.
+    debug: true

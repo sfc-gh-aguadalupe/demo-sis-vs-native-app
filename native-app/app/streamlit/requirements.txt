@@ -1,0 +1,12 @@
+# native-app/app/streamlit/requirements.txt
+#
+# Container-runtime Streamlit apps install dependencies from PyPI.
+# The following packages are already bundled with the container runtime:
+#
+#   streamlit                (latest 1.50+ version)
+#   snowflake-snowpark-python
+#   pandas
+#
+# This file is intentionally minimal — the demo uses only bundled packages.
+# If you extend the app with additional packages, list them here and ensure
+# the consumer account has a PyPI External Access Integration configured.

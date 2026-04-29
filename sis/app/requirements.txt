@@ -1,0 +1,17 @@
+# sis/app/requirements.txt
+#
+# Container-runtime Streamlit apps install dependencies from PyPI.
+# The following packages are already bundled with the container runtime
+# and do NOT need to be listed here:
+#
+#   streamlit                (latest 1.50+ version)
+#   snowflake-snowpark-python
+#   pandas
+#
+# This file is intentionally minimal for the demo.
+# If you extend the app (e.g. add plotly charts), list extra packages here
+# and make sure 05_create_pypi_eai.sql has been run and the EAI is
+# referenced in the CREATE STREAMLIT statement in 06_deploy_streamlit.sql.
+#
+# Example:
+#   plotly==5.22.0

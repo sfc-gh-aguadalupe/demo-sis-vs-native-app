@@ -1,0 +1,25 @@
+manifest_version: 1
+
+# ── Application metadata ──────────────────────────────────────────────────────
+artifacts:
+  setup_script: setup_script.sql
+  # Points to the Streamlit object created in setup_script.sql.
+  # When the consumer opens the app in Snowsight this is the first page shown.
+  default_streamlit: core.deals_app
+  # extension_code: true enables the Snowflake Native App Extension Code
+  # feature, required for container-runtime Streamlit apps.
+  extension_code: true
+
+# ── Account-level privileges the app requests from the consumer ───────────────
+# The consumer admin approves these in the app's Security tab in Snowsight,
+# or via: GRANT <privilege> TO APPLICATION SALES_DEMO_APP;
+privileges:
+  - privilege: BIND SERVICE ENDPOINT
+    description: >
+      Required to expose the container-runtime Streamlit app as a web endpoint.
+      Without this the app's UI will not be accessible.
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+configuration:
+  log_level: INFO
+  trace_level: ALWAYS
