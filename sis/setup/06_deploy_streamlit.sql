@@ -34,10 +34,14 @@ CREATE STAGE IF NOT EXISTS SALES_DB.SALES.STREAMLIT_STAGE
 -- COMPUTE_POOL = SYSTEM_COMPUTE_POOL_CPU  →  no provisioning needed,
 -- available in every Snowflake account.  The pool starts suspended
 -- and wakes automatically when the first viewer opens the app.
+-- NOTE: QUERY_WAREHOUSE is required even for container runtime — Snowflake uses
+-- it for internal metadata queries.  Without it the app fails to load with
+-- "No warehouse found for the Streamlit object."
 CREATE STREAMLIT IF NOT EXISTS SALES_DB.SALES.DEALS_APP
   FROM @SALES_DB.SALES.STREAMLIT_STAGE/app
   MAIN_FILE = 'streamlit_app.py'
   COMPUTE_POOL = SYSTEM_COMPUTE_POOL_CPU
+  QUERY_WAREHOUSE = DEMO_WH
   -- Uncomment the next line if you added packages to requirements.txt
   -- and ran 05_create_pypi_eai.sql:
   -- EXTERNAL_ACCESS_INTEGRATIONS = (PYPI_ACCESS_INTEGRATION)
