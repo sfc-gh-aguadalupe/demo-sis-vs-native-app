@@ -83,6 +83,9 @@ def get_caller_context():
 def get_caller_deals():
     import pandas as pd
     cur = rcr_conn.cursor()
+    # CALLER USAGE grants permission to use DEMO_WH, but the RCR session
+    # starts with no active warehouse — we must select it explicitly.
+    cur.execute("USE WAREHOUSE DEMO_WH")
     cur.execute(
         """
         SELECT rep_name  AS "Rep",
