@@ -24,16 +24,20 @@ GRANT MANAGE CALLER GRANTS ON ACCOUNT TO ROLE SYSADMIN
 -- ── Step 2: Grant specific caller privileges ─────────────────
 USE ROLE SYSADMIN;
 
--- Apps owned by STREAMLIT_OWNER_ROLE may SELECT from DEALS on behalf
--- of the caller (viewer).  The Row Access Policy will then filter rows
--- using the VIEWER's CURRENT_USER() / CURRENT_ROLE() — not the owner's.
-GRANT CALLER SELECT ON TABLE SALES_DB.SALES.DEALS
-  TO ROLE STREAMLIT_OWNER_ROLE;
+-- IMPORTANT: every object in the query path needs a CALLER grant.
+-- The "restricted" in Restricted Caller Rights means the RCR connection
+-- can ONLY access objects covered by an explicit CALLER grant — even if
+-- the viewer's role has broader privileges in the account.
 
--- Apps owned by STREAMLIT_OWNER_ROLE may use DEMO_WH on behalf of
--- the caller.  Required for any query the callers-rights connection runs.
-GRANT CALLER USAGE ON WAREHOUSE DEMO_WH
-  TO ROLE STREAMLIT_OWNER_ROLE;
+-- Database + schema visibility
+GRANT CALLER USAGE ON DATABASE SALES_DB TO ROLE STREAMLIT_OWNER_ROLE;
+GRANT CALLER USAGE ON SCHEMA SALES_DB.SALES TO ROLE STREAMLIT_OWNER_ROLE;
 
--- ── Verify ───────────────────────────────────────────────────
+-- Table read
+GRANT CALLER SELECT ON TABLE SALES_DB.SALES.DEALS TO ROLE STREAMLIT_OWNER_ROLE;
+
+-- Warehouse to run the query
+GRANT CALLER USAGE ON WAREHOUSE DEMO_WH TO ROLE STREAMLIT_OWNER_ROLE;
+
+-- ── Verify (should show 4 rows) ───────────────────────────────
 SHOW CALLER GRANTS TO ROLE STREAMLIT_OWNER_ROLE;
