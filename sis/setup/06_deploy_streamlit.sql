@@ -37,9 +37,12 @@ CREATE STAGE IF NOT EXISTS SALES_DB.SALES.STREAMLIT_STAGE
 -- NOTE: QUERY_WAREHOUSE is required even for container runtime — Snowflake uses
 -- it for internal metadata queries.  Without it the app fails to load with
 -- "No warehouse found for the Streamlit object."
+-- RUNTIME_NAME must be set explicitly — without it the app silently falls
+-- back to warehouse runtime and st.connection("snowflake-callers-rights") fails.
 CREATE STREAMLIT IF NOT EXISTS SALES_DB.SALES.DEALS_APP
   FROM @SALES_DB.SALES.STREAMLIT_STAGE/app
   MAIN_FILE = 'streamlit_app.py'
+  RUNTIME_NAME = 'SYSTEM$ST_CONTAINER_RUNTIME_PY3_11'
   COMPUTE_POOL = SYSTEM_COMPUTE_POOL_CPU
   QUERY_WAREHOUSE = DEMO_WH
   -- Uncomment the next line if you added packages to requirements.txt
