@@ -1,24 +1,28 @@
 definition_version: 2
 
-# ── Native App Package ────────────────────────────────────────────────────────
-# Run:  snow app run         (from the native-app/ directory)
+# ── Native App Package (SPCS) ────────────────────────────────────────────────
+# Run:  snow app run --temporary-connection --account <acct> --user <user> \
+#         --authenticator SNOWFLAKE_JWT --private-key-path <key>
+#
 # This command:
 #   1. Creates or updates the application package SALES_DEMO_PKG
-#   2. Uploads the contents of native-app/app/ to the package stage
+#   2. Uploads manifest.yml, setup_script.sql, service_spec.yaml to the stage
 #   3. Creates (or upgrades) the application SALES_DEMO_APP in dev mode
 #
-# The Streamlit inside the app uses SYSTEM_COMPUTE_POOL_CPU — the same
-# system-managed CPU compute pool used by the SiS standalone demo.
-# No compute pool provisioning is required in the consumer account.
+# The Streamlit app runs inside an SPCS container. The Docker image must be
+# built and pushed separately (see native-app/app/streamlit/Dockerfile).
 # ─────────────────────────────────────────────────────────────────────────────
 
 entities:
   sales_demo_pkg:
     type: application package
-    # All files under native-app/app/ are uploaded to the root of the stage
     artifacts:
-      - src: app
-        dest: /
+      - src: app/manifest.yml
+        dest: manifest.yml
+      - src: app/setup_script.sql
+        dest: setup_script.sql
+      - src: app/service_spec.yaml
+        dest: service_spec.yaml
     manifest: app/manifest.yml
 
   sales_demo_app:

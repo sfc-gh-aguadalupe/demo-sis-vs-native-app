@@ -1,50 +1,96 @@
 """
 native-app/app/streamlit/streamlit_app.py
-Restricted Caller's Rights Demo — Streamlit inside a Snowflake Native App
+Restricted Caller's Rights Demo — Streamlit inside a Snowflake Native App (SPCS)
 
-This app is structurally identical to the SiS standalone version
-(sis/app/streamlit_app.py) — same dual-connection pattern, same
-two-column layout.  The differences are:
+This app runs as an SPCS service inside a Snowflake Native App. It demonstrates
+the same dual-connection RCR pattern as the SiS standalone demo, but uses the
+SPCS authentication mechanism:
 
-  1. CONTEXT  This Streamlit runs INSIDE a Snowflake Native App.
-              CURRENT_DATABASE() returns the app name, not CONSUMER_DB.
-              The consumer installed this app; the provider never touches
-              their account or data.
+  Owner connection:
+    Uses the service OAuth token from /snowflake/session/token.
+    This token represents the app's own identity (the application object).
 
-  2. DATA     The app queries CONSUMER_DB.SALES.DEALS — a table in the
-              CONSUMER's own account that the consumer granted to the app.
+  RCR (caller) connection:
+    Uses the service OAuth token PLUS the caller's ingress token from the
+    Sf-Context-Current-User-Token header. When both tokens are provided
+    together, Snowflake executes queries as the calling user (restricted
+    by caller grants configured by the consumer admin).
 
-  3. CALLER   Caller grants are configured by the CONSUMER's admin
-  GRANTS      (consumer_setup/02_setup_caller_grants.sql), not the provider.
-              The consumer controls which of their tables and warehouses
-              the app can access via caller rights.
-
-The dual-connection pattern makes the security model tangible:
+The dual-column layout makes the security model tangible:
   Left  panel  (owner's rights)  → always shows all 6 deals
   Right panel  (caller's rights) → shows only the viewer's own deals
 
 Prerequisites (see native-app/consumer_setup/):
   - App installed: snow app run (from native-app/ directory)
+  - Consumer created compute pool + granted to app
+  - Called core.start_app('<pool>', '<wh>')
   - 01_create_consumer_data.sql  run by consumer
   - 02_setup_caller_grants.sql   run by consumer admin
   - 03_grant_to_app.sql          run by consumer admin
 """
 
+import os
 import streamlit as st
+import pandas as pd
+import snowflake.connector
+
 
 st.set_page_config(
-    page_title="RCR Demo — Native App",
+    page_title="RCR Demo — Native App (SPCS)",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# IMPORTANT: Create BOTH connections at the TOP of the script (module level).
-# See sis/app/streamlit_app.py for a full explanation of why.
+# SPCS Authentication
 # ─────────────────────────────────────────────────────────────────────────────
-owner_conn = st.connection("snowflake")                   # app's owner rights
-rcr_conn   = st.connection("snowflake-callers-rights")    # viewer's identity
+
+def _get_login_token() -> str:
+    """Read the service OAuth token mounted by SPCS."""
+    with open("/snowflake/session/token", "r") as f:
+        return f.read().strip()
+
+
+def _get_owner_connection():
+    """Create a connection using the service's own identity (owner's rights)."""
+    return snowflake.connector.connect(
+        host=os.environ["SNOWFLAKE_HOST"],
+        account=os.environ["SNOWFLAKE_ACCOUNT"],
+        token=_get_login_token(),
+        authenticator="oauth",
+        warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE", ""),
+    )
+
+
+def _get_caller_connection():
+    """
+    Create an RCR connection using the caller's ingress token.
+
+    When executeAsCaller is enabled in the service spec, SPCS injects
+    the Sf-Context-Current-User-Token header on every ingress request.
+    Concatenating it with the service token (separated by a dot) tells
+    Snowflake to execute as the calling user, restricted by caller grants.
+    """
+    caller_token = st.context.headers.get("Sf-Context-Current-User-Token", "")
+    if not caller_token:
+        st.error(
+            "No caller token found. Ensure `executeAsCaller: true` is set "
+            "in the service spec and you are accessing the app via the public endpoint."
+        )
+        st.stop()
+
+    # Combine service token + caller token for RCR
+    combined_token = _get_login_token() + "." + caller_token
+
+    return snowflake.connector.connect(
+        host=os.environ["SNOWFLAKE_HOST"],
+        account=os.environ["SNOWFLAKE_ACCOUNT"],
+        token=combined_token,
+        authenticator="oauth",
+        warehouse=os.environ.get("SNOWFLAKE_WAREHOUSE", ""),
+    )
+
 
 # Table the consumer granted to this app (see consumer_setup/03_grant_to_app.sql)
 CONSUMER_DEALS_TABLE = "CONSUMER_DB.SALES.DEALS"
@@ -53,44 +99,51 @@ CONSUMER_DEALS_TABLE = "CONSUMER_DB.SALES.DEALS"
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def get_owner_context():
-    return owner_conn.query(
-        "SELECT CURRENT_USER() AS who, CURRENT_ROLE() AS role, "
-        "       CURRENT_DATABASE() AS db",
-        ttl=0,
-    )
+    conn = _get_owner_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT CURRENT_USER() AS who, CURRENT_ROLE() AS role, CURRENT_DATABASE() AS db")
+    cols = [d[0] for d in cur.description]
+    df = pd.DataFrame(cur.fetchall(), columns=cols)
+    cur.close()
+    conn.close()
+    return df
+
 
 def get_owner_deals():
-    return owner_conn.query(
-        f"""
+    conn = _get_owner_connection()
+    cur = conn.cursor()
+    cur.execute(f"""
         SELECT rep_name  AS "Rep",
                region    AS "Region",
                deal_name AS "Deal",
                amount    AS "Amount ($)"
         FROM   {CONSUMER_DEALS_TABLE}
         ORDER  BY amount DESC
-        """,
-        ttl=0,
-    )
-
-@st.cache_data(scope="session")   # scope="session" required for RCR
-def get_caller_context():
-    # Must use raw cursor — rcr_conn.query() wraps with @st.cache_data
-    # internally (no scope="session"), which Streamlit blocks for RCR.
-    import pandas as pd
-    cur = rcr_conn.cursor()
-    cur.execute(
-        "SELECT CURRENT_USER() AS who, CURRENT_ROLE() AS role, "
-        "       CURRENT_DATABASE() AS db"
-    )
+    """)
     cols = [d[0] for d in cur.description]
-    return pd.DataFrame(cur.fetchall(), columns=cols)
+    df = pd.DataFrame(cur.fetchall(), columns=cols)
+    cur.close()
+    conn.close()
+    return df
+
+
+@st.cache_data(scope="session")
+def get_caller_context():
+    conn = _get_caller_connection()
+    cur = conn.cursor()
+    cur.execute("USE WAREHOUSE CONSUMER_WH")
+    cur.execute("SELECT CURRENT_USER() AS who, CURRENT_ROLE() AS role, CURRENT_DATABASE() AS db")
+    cols = [d[0] for d in cur.description]
+    df = pd.DataFrame(cur.fetchall(), columns=cols)
+    cur.close()
+    conn.close()
+    return df
+
 
 @st.cache_data(scope="session")
 def get_caller_deals():
-    import pandas as pd
-    cur = rcr_conn.cursor()
-    # CALLER USAGE grants permission to use CONSUMER_WH, but the RCR session
-    # starts with no active warehouse — we must select it explicitly.
+    conn = _get_caller_connection()
+    cur = conn.cursor()
     cur.execute("USE WAREHOUSE CONSUMER_WH")
     cur.execute(f"""
         SELECT rep_name  AS "Rep",
@@ -101,17 +154,17 @@ def get_caller_deals():
         ORDER  BY amount DESC
     """)
     cols = [d[0] for d in cur.description]
-    return pd.DataFrame(cur.fetchall(), columns=cols)
+    df = pd.DataFrame(cur.fetchall(), columns=cols)
+    cur.close()
+    conn.close()
+    return df
 
 
 # ── Native App banner ─────────────────────────────────────────────────────────
-app_ctx = owner_conn.query(
-    "SELECT CURRENT_DATABASE() AS app_name", ttl=0
-)
 st.info(
-    f"📦 Running inside Native App: **{app_ctx['APP_NAME'][0]}**  \n"
+    "📦 Running inside **Native App** (SPCS)  \n"
     "The provider shipped this app — the consumer installed it, "
-    "granted data access, and configured caller grants.  "
+    "created a compute pool, granted data access, and configured caller grants. "
     "The provider never accessed this account."
 )
 
@@ -123,8 +176,8 @@ st.markdown(
 
     | Connection | Identity used | Row Access Policy applies as… |
     |---|---|---|
-    | `st.connection("snowflake")` | App **owner** | App's role → sees **all rows** |
-    | `st.connection("snowflake-callers-rights")` | App **viewer** | Viewer's default role → **filtered rows** |
+    | Service token (owner) | App **service identity** | App's role → sees **all rows** |
+    | Combined token (RCR)  | App **viewer** | Viewer's default role → **filtered rows** |
 
     > **Try it:** open this app as `ALICE_WEST`, `BOB_EAST`, or `SALES_MANAGER`
     > and watch the right panel change while the left stays the same.
@@ -140,13 +193,13 @@ col_owner, col_rcr = st.columns(2, gap="large")
 # ── Left: Owner's rights ─────────────────────────────────────────────────────
 with col_owner:
     st.subheader("Owner's Rights")
-    st.caption("`st.connection('snowflake')`")
+    st.caption("Service OAuth token (app's own identity)")
 
     ctx = get_owner_context()
     st.info(
         f"Running as **{ctx['WHO'][0]}**  \n"
         f"Role: `{ctx['ROLE'][0]}`  \n"
-        f"DB context: `{ctx['DB'][0]}`  ← app name, not consumer DB"
+        f"DB context: `{ctx['DB'][0]}`"
     )
 
     df_owner = get_owner_deals()
@@ -163,17 +216,17 @@ with col_owner:
 # ── Right: Restricted Caller's Rights ────────────────────────────────────────
 with col_rcr:
     st.subheader("Restricted Caller's Rights")
-    st.caption("`st.connection('snowflake-callers-rights')`")
+    st.caption("Combined token (service + caller ingress token)")
 
     ctx_rcr = get_caller_context()
     st.info(
         f"Running as **{ctx_rcr['WHO'][0]}**  \n"
         f"Role: `{ctx_rcr['ROLE'][0]}`  \n"
-        f"DB context: `{ctx_rcr['DB'][0]}`  ← viewer's context"
+        f"DB context: `{ctx_rcr['DB'][0]}`"
     )
 
     df_rcr = get_caller_deals()
-    total  = 6
+    total = 6
     st.metric(
         "Deals visible",
         len(df_rcr),
@@ -198,7 +251,8 @@ with col_rcr:
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.divider()
 st.caption(
-    "Native App · Container runtime · `SYSTEM_COMPUTE_POOL_CPU` · "
-    "RCR is a Preview feature (available in all commercial regions).  "
-    "See [POSITIONING.md](../../POSITIONING.md) for the full comparison with SiS Standalone."
+    "Native App · SPCS container · `CPU_X64_S` compute pool · "
+    "RCR via `executeAsCaller` · "
+    "See POSITIONING.md for the full comparison with SiS Standalone."
 )
+

@@ -1,0 +1,30 @@
+# native-app/app/service_spec.yaml
+# SPCS service specification for the Deals RCR demo Streamlit app.
+# This runs inside the consumer's compute pool.
+spec:
+  containers:
+    - name: streamlit
+      image: /SALES_DEMO_PKG/app_src/img_repo/deals_streamlit:latest
+      env:
+        STREAMLIT_SERVER_PORT: "8501"
+      resources:
+        requests:
+          memory: 512M
+          cpu: "0.5"
+        limits:
+          memory: 1G
+          cpu: "1.0"
+      readinessProbe:
+        port: 8501
+        path: /_stcore/health
+  endpoints:
+    - name: ui
+      port: 8501
+      public: true
+  capabilities:
+    securityContext:
+      executeAsCaller: true
+  serviceRoles:
+    - name: app_user_role
+      endpoints:
+        - ui
