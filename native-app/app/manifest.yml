@@ -6,10 +6,6 @@ artifacts:
     images:
       - /SALES_DEMO_PKG/app_src/img_repo/deals_streamlit:latest
 
-default_web_endpoint:
-  service: core.deals_service
-  endpoint: ui
-
 privileges:
   - BIND SERVICE ENDPOINT:
       description: Required to expose the Streamlit UI as a public web endpoint.
