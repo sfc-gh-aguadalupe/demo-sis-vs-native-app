@@ -3,6 +3,10 @@
 This guide walks you through the Streamlit in Snowflake (standalone) Restricted
 Caller's Rights demo step by step.
 
+> **Note:** This demo uses `SYSTEM_COMPUTE_POOL_CPU` (the system-managed compute pool
+> available in every account). The Native App demo in `native-app/` uses SPCS with a
+> consumer-created compute pool instead — see [native-app/README.md](../native-app/README.md).
+
 ---
 
 ## What this demo shows

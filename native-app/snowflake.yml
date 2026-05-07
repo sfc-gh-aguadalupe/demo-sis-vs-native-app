@@ -29,6 +29,4 @@ entities:
     type: application
     from:
       target: sales_demo_pkg
-    # debug: true enables development mode — the app is installed directly
-    # from the stage without a versioned release.  Remove for production.
-    debug: true
+    # debug mode not supported with manifest_version 2+; use session debugging instead.

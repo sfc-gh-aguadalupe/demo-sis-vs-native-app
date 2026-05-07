@@ -21,10 +21,10 @@ spec:
     - name: ui
       port: 8501
       public: true
-  capabilities:
-    securityContext:
-      executeAsCaller: true
-  serviceRoles:
-    - name: app_user_role
-      endpoints:
-        - ui
+capabilities:
+  securityContext:
+    executeAsCaller: true
+serviceRoles:
+  - name: app_user_role
+    endpoints:
+      - ui
